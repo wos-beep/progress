@@ -3,96 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.4.0] ステータス成長記録 - Dark Mode</title>
+    <title>[v1.5.1] ステータス成長記録 - 兵士数項目最適化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --primary: #3700b3;
-            --accent: #03dac6;
-            --danger: #cf6679;
-            --border: #333;
-        }
-        body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: var(--bg-color); color: var(--text-color); line-height: 1.6; }
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
+        body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: var(--bg-color); color: var(--text-color); }
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px; }
+        .header-flex { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .version-tag { font-size: 0.7em; color: #888; background: #333; padding: 2px 8px; border-radius: 4px; }
-        h2, h3 { margin-top: 0; color: var(--accent); }
-        textarea { width: 100%; height: 100px; padding: 10px; background: #2c2c2c; color: #fff; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; }
+        h3 { margin-top: 0; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 10px; }
+        textarea { width: 100%; height: 80px; padding: 10px; background: #2c2c2c; color: #fff; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; }
         input[type="date"], input[type="number"] { padding: 8px; background: #2c2c2c; color: #fff; border: 1px solid var(--border); border-radius: 4px; }
-        
         .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-        button { flex: 1; min-width: 100px; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-main { background: var(--accent); color: #000; }
         .btn-sub { background: #444; color: #fff; }
-        .btn-danger { background: var(--danger); color: #000; }
-        button:hover { filter: brightness(1.2); }
-
-        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 15px; background: #252525; padding: 15px; border-radius: 8px; }
+        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; background: #252525; padding: 15px; border-radius: 8px; margin-top: 10px; }
         .edit-item { display: flex; flex-direction: column; }
-        .edit-item label { font-size: 11px; color: #aaa; margin-bottom: 2px; }
-
-        .history-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-        .history-table th, .history-table td { border-bottom: 1px solid #333; padding: 10px; text-align: left; }
-        .history-table tr:hover { background: #252525; }
-
-        .canvas-container { position: relative; height: 400px; width: 100%; margin-top: 10px; }
-        input[type="file"] { display: none; }
+        .edit-item label { font-size: 10px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .history-table td { border-bottom: 1px solid #333; padding: 8px; }
+        .canvas-container { position: relative; height: 500px; width: 100%; }
     </style>
 </head>
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.4.0</span></h2>
-        <div class="btn-group" style="margin-top:0;">
-            <button class="btn-sub" onclick="exportData()" style="font-size:11px;">📤 Export</button>
-            <button class="btn-sub" onclick="document.getElementById('fileInput').click()" style="font-size:11px;">📥 Import</button>
+        <h2>📈 Status Tracker <span class="version-tag">v1.5.1</span></h2>
+        <div class="btn-group">
+            <button class="btn-sub" onclick="exportData()" style="font-size:10px;">Export</button>
+            <button class="btn-sub" onclick="document.getElementById('fileInput').click()" style="font-size:10px;">Import</button>
             <input type="file" id="fileInput" accept=".json" onchange="importData(event)">
         </div>
     </div>
 
     <div class="card">
         <h3>1. データの取り込み</h3>
-        <div style="margin-bottom:15px;">
-            日付: <input type="date" id="inputDate">
-        </div>
+        <div style="margin-bottom:10px;">日付: <input type="date" id="inputDate"></div>
         <textarea id="ocrInput" placeholder="Pixelのコピーテキストを貼り付け"></textarea>
-        <div class="btn-group">
-            <button class="btn-main" onclick="parseText()">解析・修正して保存</button>
-        </div>
+        <button class="btn-main" style="width:100%; margin-top:10px;" onclick="parseText()">解析・修正</button>
 
-        <div id="editArea" style="display:none; border-top: 1px solid #333; margin-top: 20px; padding-top: 10px;">
+        <div id="editArea" style="display:none; border-top: 1px solid #333; margin-top: 15px; padding-top: 10px;">
             <div id="statsGrid" class="edit-grid"></div>
             <div class="btn-group">
                 <button class="btn-main" onclick="saveToStorage()">統合保存</button>
-                <button class="btn-sub" onclick="document.getElementById('editArea').style.display='none'">キャンセル</button>
+                <button class="btn-sub" onclick="document.getElementById('editArea').style.display='none'">閉じる</button>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <h3>2. 成長推移グラフ</h3>
+        <h3>2. 成長推移（左右2軸）</h3>
         <div class="canvas-container">
             <canvas id="growthChart"></canvas>
         </div>
     </div>
 
     <div class="card">
-        <h3>3. 履歴の管理・手動修正</h3>
-        <div id="historyList">
-            </div>
-    </div>
-
-    <div style="text-align: center; margin-bottom: 50px;">
-        <button class="btn-danger" style="width: auto; padding: 5px 20px; font-size: 11px;" onclick="clearData()">全データ消去</button>
+        <h3>3. 履歴管理</h3>
+        <div id="historyList"></div>
     </div>
 
     <script>
         let myChart;
         const storageKey = 'game_stats_v1.2.0'; 
-        const displayTargets = ["部隊攻撃力", "部隊防御力", "部隊HP", "盾兵攻撃力", "盾兵防御力", "盾兵HP", "槍兵攻撃力", "弓兵攻撃力", "出征速度ボーナス"];
+        
+        // 兵士数項目をリスト化
+        const soldierStats = ["烈日盾兵", "烈日槍兵", "烈日弓兵", "切り札盾兵", "切り札槍兵", "切り札弓兵"];
+        // パーセント項目をリスト化
+        const percentStats = ["部隊攻撃力", "部隊防御力", "部隊HP", "盾兵攻撃力", "盾兵防御力", "盾兵HP", "槍兵攻撃力", "弓兵攻撃力", "出征速度ボーナス"];
+        
+        // 全表示ターゲット
+        const displayTargets = [...percentStats, ...soldierStats];
 
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
@@ -103,7 +85,8 @@
         function parseText() {
             const text = document.getElementById('ocrInput').value;
             if (!text) return;
-            const values = text.match(/[\d,.]+(?=%|)/g) || [];
+            const values = text.match(/[\d,.]+/g) || [];
+            // 英字・漢字・カタカナ・長音を許可
             const labels = text.match(/[一-龠ぁ-んァ-ヶーA-Za-z]{2,}/g) || [];
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
@@ -112,7 +95,7 @@
                     const val = values[i].replace(/,/g, '');
                     const item = document.createElement('div');
                     item.className = 'edit-item';
-                    item.innerHTML = `<label>${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${val}">`;
+                    item.innerHTML = `<label title="${label}">${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${val}">`;
                     grid.appendChild(item);
                 }
             });
@@ -137,86 +120,33 @@
             renderHistory();
         }
 
-        // --- 履歴表示・編集機能 ---
-        function renderHistory() {
-            const rawData = localStorage.getItem(storageKey);
-            if (!rawData) return;
-            const history = JSON.parse(rawData);
-            let html = `<table class="history-table"><tr><th>日付</th><th>ステータス数</th><th>操作</th></tr>`;
-            history.forEach((entry, i) => {
-                html += `<tr>
-                    <td>${entry.date}</td>
-                    <td>${Object.keys(entry.stats).length}項目</td>
-                    <td>
-                        <button onclick="editHistory(${i})" style="padding:4px 8px; font-size:11px; width:auto; background:#03a9f4; color:#fff;">修正</button>
-                        <button onclick="deleteHistory(${i})" style="padding:4px 8px; font-size:11px; width:auto; background:#f44336; color:#fff;">削除</button>
-                    </td>
-                </tr>`;
-            });
-            html += `</table>`;
-            document.getElementById('historyList').innerHTML = html;
-        }
-
-        function editHistory(index) {
-            const history = JSON.parse(localStorage.getItem(storageKey));
-            const entry = history[index];
-            document.getElementById('inputDate').value = entry.date;
-            
-            const grid = document.getElementById('statsGrid');
-            grid.innerHTML = '';
-            for (let label in entry.stats) {
-                const item = document.createElement('div');
-                item.className = 'edit-item';
-                item.innerHTML = `<label>${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${entry.stats[label]}">`;
-                grid.appendChild(item);
-            }
-            document.getElementById('editArea').style.display = 'block';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function deleteHistory(index) {
-            if (confirm("この日のデータを削除してもよろしいですか？")) {
-                let history = JSON.parse(localStorage.getItem(storageKey));
-                history.splice(index, 1);
-                localStorage.setItem(storageKey, JSON.stringify(history));
-                updateChart();
-                renderHistory();
-            }
-        }
-
-        // --- エクスポート・インポート ---
-        function exportData() {
-            const data = localStorage.getItem(storageKey);
-            if (!data) return alert("データがありません");
-            const blob = new Blob([data], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `status_tracker_backup.json`;
-            a.click();
-        }
-
-        function importData(event) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                localStorage.setItem(storageKey, e.target.result);
-                location.reload();
-            };
-            reader.readAsText(event.target.files[0]);
-        }
-
         function updateChart() {
             const rawData = localStorage.getItem(storageKey);
             if (!rawData) return;
             const history = JSON.parse(rawData);
             const labels = history.map(d => d.date);
-            const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336'];
-            const datasets = displayTargets.map((target, i) => ({
-                label: target,
-                data: history.map(d => d.stats[target] || null),
-                borderColor: colors[i % colors.length],
-                tension: 0.2,
-                spanGaps: true
-            }));
+            
+            // カラフルな20色セット（項目が多くても被りにくい）
+            const colors = [
+                '#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', 
+                '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6'
+            ];
+
+            const datasets = displayTargets.map((target, i) => {
+                const isSoldier = soldierStats.includes(target);
+                return {
+                    label: target,
+                    data: history.map(d => (d.stats && d.stats[target] !== undefined) ? d.stats[target] : null),
+                    borderColor: colors[i % colors.length],
+                    backgroundColor: colors[i % colors.length],
+                    yAxisID: isSoldier ? 'y1' : 'y', // 兵士数なら右軸
+                    tension: 0.2,
+                    spanGaps: true,
+                    borderWidth: isSoldier ? 3 : 2, // 兵士数を少し太くして区別
+                    borderDash: isSoldier ? [5, 2] : [] // 兵士数を点線にする（任意）
+                };
+            });
+
             const ctx = document.getElementById('growthChart').getContext('2d');
             if (myChart) myChart.destroy();
             myChart = new Chart(ctx, {
@@ -225,17 +155,69 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#aaa', font: { size: 10 } } } },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#aaa', font: { size: 9 }, boxWidth: 8, padding: 10 }
+                        },
+                        tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 14 } }
+                    },
                     scales: { 
                         x: { ticks: { color: '#aaa' }, grid: { color: '#333' } },
-                        y: { ticks: { color: '#aaa', callback: v => v + '%' }, grid: { color: '#333' } }
+                        y: { 
+                            type: 'linear', position: 'left',
+                            ticks: { color: '#03dac6', callback: v => v + '%' },
+                            grid: { color: '#333' },
+                            title: { display: true, text: 'ステータス (%)', color: '#03dac6' }
+                        },
+                        y1: {
+                            type: 'linear', position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#bb86fc', callback: v => v.toLocaleString() },
+                            title: { display: true, text: '兵士数 (実数)', color: '#bb86fc' }
+                        }
                     }
                 }
             });
         }
 
-        function clearData() {
-            if(confirm("全消去しますか？")) { localStorage.removeItem(storageKey); location.reload(); }
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem(storageKey) || "[]");
+            let html = `<table class="history-table">`;
+            history.forEach((entry, i) => {
+                html += `<tr><td>${entry.date}</td><td>${Object.keys(entry.stats).length}項目</td>
+                    <td style="text-align:right;"><button onclick="editHistory(${i})" style="background:#03a9f4; padding:3px 7px; font-size:10px; width:auto;">修正</button></td></tr>`;
+            });
+            document.getElementById('historyList').innerHTML = html + `</table>`;
+        }
+
+        function editHistory(index) {
+            const history = JSON.parse(localStorage.getItem(storageKey));
+            const entry = history[index];
+            document.getElementById('inputDate').value = entry.date;
+            const grid = document.getElementById('statsGrid');
+            grid.innerHTML = '';
+            for (let label in entry.stats) {
+                grid.innerHTML += `<div class="edit-item"><label>${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${entry.stats[label]}"></div>`;
+            }
+            document.getElementById('editArea').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function exportData() {
+            const data = localStorage.getItem(storageKey);
+            if (!data) return;
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+            a.download = `status_tracker_v151.json`;
+            a.click();
+        }
+
+        function importData(e) {
+            const r = new FileReader();
+            r.onload = (ev) => { localStorage.setItem(storageKey, ev.target.result); location.reload(); };
+            r.readAsText(e.target.files[0]);
         }
     </script>
 </body>
