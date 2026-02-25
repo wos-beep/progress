@@ -3,105 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ステータス成長記録</title>
+    <title>ステータス成長記録（修正機能付き）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f4f7f9; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        textarea { width: 100%; height: 100px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .canvas-container { position: relative; height: 40vh; width: 100%; }
+        body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h3 { margin-top: 0; border-left: 4px solid #007bff; padding-left: 10px; }
+        textarea { width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 15px; background: #f9f9f9; padding: 15px; border-radius: 8px; }
+        .edit-item { display: flex; flex-direction: column; }
+        .edit-item label { font-size: 12px; color: #666; margin-bottom: 4px; }
+        .edit-item input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .btn-group { margin-top: 15px; display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-parse { background: #6c757d; color: white; }
+        .btn-save { background: #007bff; color: white; }
+        .btn-clear { background: #dc3545; color: white; width: auto; flex: none; margin-top: 20px; }
+        button:hover { opacity: 0.8; }
+        .canvas-container { position: relative; height: 400px; width: 100%; }
     </style>
 </head>
 <body>
 
-    <h2>📈 ステータス成長推移</h2>
+    <h2>📊 ステータス成長推移マネージャー</h2>
 
     <div class="card">
-        <h3>1. データを追加</h3>
-        <p>日付: <input type="date" id="inputDate"></p>
-        <p>OCRのコピーを貼り付け:</p>
-        <textarea id="ocrInput" placeholder="例: 盾兵攻撃力 488.25%&#10;盾兵防御力 521.25%"></textarea>
-        <button onclick="saveData()">データを保存して更新</button>
-        <button onclick="clearData()" style="background:#dc3545;">データ全消去</button>
+        <h3>1. データの取り込み</h3>
+        <div style="margin-bottom:15px;">
+            日付: <input type="date" id="inputDate">
+        </div>
+        <textarea id="ocrInput" placeholder="Pixelでコピーしたテキストをここに貼り付け"></textarea>
+        <div class="btn-group">
+            <button class="btn-parse" onclick="parseText()">数値を解析して修正モードへ</button>
+        </div>
+
+        <div id="editArea" style="display:none;">
+            <h4 style="margin-bottom:5px;">内容を確認・手動修正：</h4>
+            <div id="statsGrid" class="edit-grid"></div>
+            <div class="btn-group">
+                <button class="btn-save" onclick="saveToStorage()">この内容でグラフに保存</button>
+            </div>
+        </div>
     </div>
 
     <div class="card">
-        <h3>2. 推移グラフ</h3>
+        <h3>2. 成長グラフ</h3>
         <div class="canvas-container">
             <canvas id="growthChart"></canvas>
         </div>
     </div>
 
+    <button class="btn-clear" onclick="clearData()">全データリセット</button>
+
     <script>
         let myChart;
-        const storageKey = 'game_stats_data';
+        const storageKey = 'game_stats_v2';
+        // グラフに表示したい優先項目
+        const displayTargets = ["盾兵攻撃力", "盾兵防御力", "盾兵HP", "部隊攻撃力", "部隊防御力"];
 
-        // ページ読み込み時の処理
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
             updateChart();
         };
 
-        // データの抽出と保存
-        function saveData() {
-            const date = document.getElementById('inputDate').value;
+        // --- 1. テキスト解析ロジック ---
+        function parseText() {
             const text = document.getElementById('ocrInput').value;
             if (!text) return alert("テキストを入力してください");
 
-            // 正規表現で「項目名」と「数値」を抽出
-            const stats = {};
-            const lines = text.split('\n');
-            lines.forEach(line => {
-                // 「項目名」と「数値（小数点含む）」を抽出する正規表現
-                const match = line.match(/([^\d%]+)\s*([\d.]+)/);
-                if (match) {
-                    const label = match[1].trim();
-                    const value = parseFloat(match[2]);
-                    stats[label] = value;
+            // 数値（%, カンマ対応）と日本語項目名を分離して抽出
+            const values = text.match(/[\d,.]+(?=%|)/g) || [];
+            const labels = text.match(/[一-龠ぁ-んァ-ヶ]{2,}/g) || [];
+
+            const grid = document.getElementById('statsGrid');
+            grid.innerHTML = '';
+            
+            // 抽出された項目をすべて入力欄（input）として生成
+            labels.forEach((label, i) => {
+                if (values[i]) {
+                    const val = values[i].replace(/,/g, '');
+                    const item = document.createElement('div');
+                    item.className = 'edit-item';
+                    item.innerHTML = `
+                        <label>${label}</label>
+                        <input type="number" step="0.01" class="stat-input" data-label="${label}" value="${val}">
+                    `;
+                    grid.appendChild(item);
                 }
             });
 
-            if (Object.keys(stats).length === 0) return alert("数値が見つかりませんでした");
+            document.getElementById('editArea').style.display = 'block';
+        }
 
-            // ローカルストレージから既存データを取得
+        // --- 2. 保存ロジック ---
+        function saveToStorage() {
+            const date = document.getElementById('inputDate').value;
+            const inputs = document.querySelectorAll('.stat-input');
+            const stats = {};
+
+            inputs.forEach(input => {
+                stats[input.dataset.label] = parseFloat(input.value);
+            });
+
             const rawData = localStorage.getItem(storageKey);
             const history = rawData ? JSON.parse(rawData) : [];
             
-            // 新しいデータを追加
-            history.push({ date, stats });
-            // 日付順にソート
+            // 同じ日付があれば上書き、なければ追加
+            const existingIndex = history.findIndex(d => d.date === date);
+            if (existingIndex > -1) {
+                history[existingIndex] = { date, stats };
+            } else {
+                history.push({ date, stats });
+            }
+
             history.sort((a, b) => new Date(a.date) - new Date(b.date));
-            
             localStorage.setItem(storageKey, JSON.stringify(history));
-            alert("保存しました！");
+            
+            alert("保存しました！グラフを更新します。");
+            document.getElementById('editArea').style.display = 'none';
+            document.getElementById('ocrInput').value = '';
             updateChart();
         }
 
-        // グラフの更新
+        // --- 3. グラフ描画ロジック ---
         function updateChart() {
             const rawData = localStorage.getItem(storageKey);
             if (!rawData) return;
             const history = JSON.parse(rawData);
 
             const labels = history.map(d => d.date);
-            
-            // 抽出したい項目リスト（画像に合わせて調整）
-            const targetStats = ["盾兵攻撃力", "盾兵防御力", "盾兵HP"];
-            const colors = ['#ff6384', '#36a2eb', '#4bc0c0'];
+            const colors = ['#ff6384', '#36a2eb', '#4bc0c0', '#ff9f40', '#9966ff'];
 
-            const datasets = targetStats.map((label, i) => ({
-                label: label,
-                data: history.map(d => d.stats[label] || null),
-                borderColor: colors[i],
+            const datasets = displayTargets.map((target, i) => ({
+                label: target,
+                data: history.map(d => d.stats[target] || null),
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '22',
                 fill: false,
-                tension: 0.1
+                tension: 0.2,
+                spanGaps: true // データが欠けていても線を繋ぐ
             }));
 
             const ctx = document.getElementById('growthChart').getContext('2d');
-            
-            if (myChart) myChart.destroy(); // 既存のグラフを破棄
+            if (myChart) myChart.destroy();
 
             myChart = new Chart(ctx, {
                 type: 'line',
@@ -109,13 +153,14 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: false } }
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { y: { ticks: { callback: value => value + '%' } } }
                 }
             });
         }
 
         function clearData() {
-            if(confirm("全てのデータを削除しますか？")) {
+            if(confirm("データを全て消去しますか？")) {
                 localStorage.removeItem(storageKey);
                 location.reload();
             }
