@@ -71,21 +71,23 @@
             const text = document.getElementById('ocrInput').value;
             if (!text) return alert("テキストを入力してください");
 
-            // 数値（%, カンマ対応）と日本語項目名を分離して抽出
+            // 改良版：長音記号「ー」を許可し、かつ「％」などは除外する
             const values = text.match(/[\d,.]+(?=%|)/g) || [];
-            const labels = text.match(/[一-龠ぁ-んァ-ヶ]{2,}/g) || [];
+            const labels = text.match(/[一-龠ぁ-んァ-ヶー]{2,}/g) || [];
 
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
-            
-            // 抽出された項目をすべて入力欄（input）として生成
+    
             labels.forEach((label, i) => {
+            // 「ボーナス」などの単語が「ボ」と「ナス」に分かれないよう、
+            // 抽出したラベルをさらに精査することも可能ですが、
+            // 基本的には上記の正規表現に「ー」を入れるだけで解決します。
                 if (values[i]) {
                     const val = values[i].replace(/,/g, '');
                     const item = document.createElement('div');
                     item.className = 'edit-item';
                     item.innerHTML = `
-                        <label>${label}</label>
+                    <label>${label}</label>
                         <input type="number" step="0.01" class="stat-input" data-label="${label}" value="${val}">
                     `;
                     grid.appendChild(item);
@@ -93,7 +95,7 @@
             });
 
             document.getElementById('editArea').style.display = 'block';
-        }
+            }
 
         // --- 2. 保存ロジック ---
         function saveToStorage() {
@@ -168,3 +170,4 @@
     </script>
 </body>
 </html>
+
