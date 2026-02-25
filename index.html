@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.2.0] ステータス成長記録（データ統合版）</title>
+    <title>[v1.3.0] ステータス成長記録（入出力機能付き）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f0f2f5; color: #333; }
@@ -14,36 +14,41 @@
         textarea { width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
         .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 15px; background: #f9f9f9; padding: 15px; border-radius: 8px; }
         .edit-item { display: flex; flex-direction: column; }
-        .edit-item label { font-size: 11px; color: #666; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .edit-item label { font-size: 11px; color: #666; margin-bottom: 2px; }
         .edit-item input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .btn-group { margin-top: 15px; display: flex; gap: 10px; }
-        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-group { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
+        button { flex: 1; min-width: 120px; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-parse { background: #6c757d; color: white; }
         .btn-save { background: #28a745; color: white; }
+        .btn-export { background: #17a2b8; color: white; }
+        .btn-import { background: #ffc107; color: #333; }
         .btn-clear { background: #dc3545; color: white; width: auto; font-size: 12px; padding: 5px 10px; margin-top: 40px; }
         .canvas-container { position: relative; height: 400px; width: 100%; }
-        .info-text { font-size: 12px; color: #0056b3; margin-top: 5px; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
     <div class="header-flex">
-        <h2>📈 ステータス推移 <span class="version-tag">v1.2.0</span></h2>
+        <h2>📈 ステータス推移 <span class="version-tag">v1.3.0</span></h2>
+        <div>
+            <button class="btn-export" style="padding: 8px; font-size: 12px;" onclick="exportData()">📤 エクスポート</button>
+            <button class="btn-import" style="padding: 8px; font-size: 12px;" onclick="document.getElementById('fileInput').click()">📥 インポート</button>
+            <input type="file" id="fileInput" accept=".json" onchange="importData(event)">
+        </div>
     </div>
 
     <div class="card">
         <h3>1. データの取り込み</h3>
         <div style="margin-bottom:15px;">
             日付: <input type="date" id="inputDate">
-            <div class="info-text">※同日のデータは「不足分を追加・既存分を更新」して統合されます。</div>
         </div>
-        <textarea id="ocrInput" placeholder="コピペ1回目を貼り付け -> 保存 -> 2回目を貼り付け -> 保存... で統合されます"></textarea>
+        <textarea id="ocrInput" placeholder="Pixelのコピーテキストを貼り付け"></textarea>
         <div class="btn-group">
             <button class="btn-parse" onclick="parseText()">数値を解析して確認</button>
         </div>
 
         <div id="editArea" style="display:none; border-top: 1px dashed #ccc; margin-top: 20px; padding-top: 10px;">
-            <p style="font-size:14px; color:#555;">解析された項目：</p>
             <div id="statsGrid" class="edit-grid"></div>
             <div class="btn-group">
                 <button class="btn-save" onclick="saveToStorage()">この内容を本日のデータに統合</button>
@@ -58,11 +63,12 @@
         </div>
     </div>
 
-    <button class="btn-clear" onclick="clearData()">全データ消去（リセット）</button>
+    <button class="btn-clear" onclick="clearData()">全データ消去</button>
 
     <script>
         let myChart;
-        const storageKey = 'game_stats_v1.2.0';
+        // ストレージキーはデータ互換性のために固定（バージョンが変わっても引き継げるように）
+        const storageKey = 'game_stats_v1.2.0'; 
         const displayTargets = ["部隊攻撃力", "部隊防御力", "部隊HP", "盾兵攻撃力", "盾兵防御力", "盾兵HP", "槍兵攻撃力", "槍兵防御力", "弓兵攻撃力", "弓兵防御力", "出征速度ボーナス"];
 
         window.onload = () => {
@@ -72,10 +78,10 @@
 
         function parseText() {
             const text = document.getElementById('ocrInput').value;
-            if (!text) return alert("テキストを入力してください");
+            if (!text) return;
 
             const values = text.match(/[\d,.]+(?=%|)/g) || [];
-            // 英字（A-Za-z）も含めるように変更
+            // 英字も含めて抽出するように修正（盾兵HP対策）
             const labels = text.match(/[一-龠ぁ-んァ-ヶーA-Za-z]{2,}/g) || [];
 
             const grid = document.getElementById('statsGrid');
@@ -87,55 +93,75 @@
                     const item = document.createElement('div');
                     item.className = 'edit-item';
                     item.innerHTML = `
-                        <label title="${label}">${label}</label>
+                        <label>${label}</label>
                         <input type="number" step="0.01" class="stat-input" data-label="${label}" value="${val}">
                     `;
                     grid.appendChild(item);
                 }
             });
-
             document.getElementById('editArea').style.display = 'block';
         }
 
-        // --- 修正の要：統合ロジック ---
         function saveToStorage() {
             const date = document.getElementById('inputDate').value;
             const inputs = document.querySelectorAll('.stat-input');
             const newStats = {};
-
-            inputs.forEach(input => {
-                newStats[input.dataset.label] = parseFloat(input.value);
-            });
+            inputs.forEach(input => { newStats[input.dataset.label] = parseFloat(input.value); });
 
             const rawData = localStorage.getItem(storageKey);
             let history = rawData ? JSON.parse(rawData) : [];
-            
             const existingIndex = history.findIndex(d => d.date === date);
 
             if (existingIndex > -1) {
-                // 【重要】既存のデータがある場合、古いデータをベースに新しいデータをマージ
-                // Object.assign(元のデータ, 新しいデータ) で、新しいデータが優先される
-                const mergedStats = Object.assign({}, history[existingIndex].stats, newStats);
-                history[existingIndex].stats = mergedStats;
+                history[existingIndex].stats = Object.assign({}, history[existingIndex].stats, newStats);
             } else {
-                // その日のデータが全くなければ新規追加
                 history.push({ date, stats: newStats });
             }
 
             history.sort((a, b) => new Date(a.date) - new Date(b.date));
             localStorage.setItem(storageKey, JSON.stringify(history));
-            
-            alert("データを統合保存しました！");
+            alert("統合保存しました。");
             document.getElementById('editArea').style.display = 'none';
             document.getElementById('ocrInput').value = '';
             updateChart();
+        }
+
+        // --- エクスポート機能 ---
+        function exportData() {
+            const data = localStorage.getItem(storageKey);
+            if (!data) return alert("データがありません");
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `game_stats_backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // --- インポート機能 ---
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    if (confirm("既存のデータに上書きしてインポートしますか？")) {
+                        localStorage.setItem(storageKey, JSON.stringify(json));
+                        location.reload();
+                    }
+                } catch (err) {
+                    alert("ファイルの形式が正しくありません");
+                }
+            };
+            reader.readAsText(file);
         }
 
         function updateChart() {
             const rawData = localStorage.getItem(storageKey);
             if (!rawData) return;
             const history = JSON.parse(rawData);
-
             const labels = history.map(d => d.date);
             const colors = ['#ff6384', '#36a2eb', '#4bc0c0', '#ff9f40', '#9966ff', '#f1c40f', '#e67e22', '#1abc9c', '#34495e', '#9b59b6'];
 
@@ -151,15 +177,14 @@
 
             const ctx = document.getElementById('growthChart').getContext('2d');
             if (myChart) myChart.destroy();
-
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
-                    scales: { y: { ticks: { callback: value => value + '%' } } }
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
+                    scales: { y: { ticks: { callback: v => v + '%' } } }
                 }
             });
         }
@@ -173,4 +198,3 @@
     </script>
 </body>
 </html>
-
