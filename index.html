@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ステータス成長記録</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f4f7f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        textarea { width: 100%; height: 100px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .canvas-container { position: relative; height: 40vh; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <h2>📈 ステータス成長推移</h2>
+
+    <div class="card">
+        <h3>1. データを追加</h3>
+        <p>日付: <input type="date" id="inputDate"></p>
+        <p>OCRのコピーを貼り付け:</p>
+        <textarea id="ocrInput" placeholder="例: 盾兵攻撃力 488.25%&#10;盾兵防御力 521.25%"></textarea>
+        <button onclick="saveData()">データを保存して更新</button>
+        <button onclick="clearData()" style="background:#dc3545;">データ全消去</button>
+    </div>
+
+    <div class="card">
+        <h3>2. 推移グラフ</h3>
+        <div class="canvas-container">
+            <canvas id="growthChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let myChart;
+        const storageKey = 'game_stats_data';
+
+        // ページ読み込み時の処理
+        window.onload = () => {
+            document.getElementById('inputDate').valueAsDate = new Date();
+            updateChart();
+        };
+
+        // データの抽出と保存
+        function saveData() {
+            const date = document.getElementById('inputDate').value;
+            const text = document.getElementById('ocrInput').value;
+            if (!text) return alert("テキストを入力してください");
+
+            // 正規表現で「項目名」と「数値」を抽出
+            const stats = {};
+            const lines = text.split('\n');
+            lines.forEach(line => {
+                // 「項目名」と「数値（小数点含む）」を抽出する正規表現
+                const match = line.match(/([^\d%]+)\s*([\d.]+)/);
+                if (match) {
+                    const label = match[1].trim();
+                    const value = parseFloat(match[2]);
+                    stats[label] = value;
+                }
+            });
+
+            if (Object.keys(stats).length === 0) return alert("数値が見つかりませんでした");
+
+            // ローカルストレージから既存データを取得
+            const rawData = localStorage.getItem(storageKey);
+            const history = rawData ? JSON.parse(rawData) : [];
+            
+            // 新しいデータを追加
+            history.push({ date, stats });
+            // 日付順にソート
+            history.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            localStorage.setItem(storageKey, JSON.stringify(history));
+            alert("保存しました！");
+            updateChart();
+        }
+
+        // グラフの更新
+        function updateChart() {
+            const rawData = localStorage.getItem(storageKey);
+            if (!rawData) return;
+            const history = JSON.parse(rawData);
+
+            const labels = history.map(d => d.date);
+            
+            // 抽出したい項目リスト（画像に合わせて調整）
+            const targetStats = ["盾兵攻撃力", "盾兵防御力", "盾兵HP"];
+            const colors = ['#ff6384', '#36a2eb', '#4bc0c0'];
+
+            const datasets = targetStats.map((label, i) => ({
+                label: label,
+                data: history.map(d => d.stats[label] || null),
+                borderColor: colors[i],
+                fill: false,
+                tension: 0.1
+            }));
+
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            
+            if (myChart) myChart.destroy(); // 既存のグラフを破棄
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: false } }
+                }
+            });
+        }
+
+        function clearData() {
+            if(confirm("全てのデータを削除しますか？")) {
+                localStorage.removeItem(storageKey);
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
