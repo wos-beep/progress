@@ -75,7 +75,8 @@
             if (!text) return alert("テキストを入力してください");
 
             const values = text.match(/[\d,.]+(?=%|)/g) || [];
-            const labels = text.match(/[一-龠ぁ-んァ-ヶー]{2,}/g) || [];
+            // 英字（A-Za-z）も含めるように変更
+            const labels = text.match(/[一-龠ぁ-んァ-ヶーA-Za-z]{2,}/g) || [];
 
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
@@ -172,3 +173,4 @@
     </script>
 </body>
 </html>
+
