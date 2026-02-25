@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.5.1] ステータス成長記録 - 兵士数項目最適化版</title>
+    <title>[v1.5.2] ステータス成長記録 - 兵士数項目最適化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -40,18 +40,19 @@
     <div class="card">
         <h3>1. データの取り込み</h3>
         <div style="margin-bottom:10px;">日付: <input type="date" id="inputDate"></div>
-        <textarea id="ocrInput" placeholder="Pixelのコピーテキストを貼り付け"></textarea>
-        <button class="btn-main" style="width:100%; margin-top:10px;" onclick="parseText()">解析・修正</button>
+        <textarea id="ocrInput" placeholder="コピーしたステータステキストをここに貼り付けてください"></textarea>
+        <button class="btn-main" style="width:100%; margin-top:10px;" onclick="parseText()">数値を抽出して確認</button>
 
         <div id="editArea" style="display:none; border-top: 1px solid #333; margin-top: 15px; padding-top: 10px;">
+            <p style="font-size: 12px; color: #888; margin-bottom: 5px;">抽出結果（誤字があれば修正してください）：</p>
             <div id="statsGrid" class="edit-grid"></div>
             <div class="btn-group">
-                <button class="btn-main" onclick="saveToStorage()">統合保存</button>
+                <button class="btn-main" onclick="saveToStorage()">この内容で統合保存</button>
                 <button class="btn-sub" onclick="document.getElementById('editArea').style.display='none'">閉じる</button>
             </div>
         </div>
     </div>
-
+    
     <div class="card">
         <h3>2. 成長推移（左右2軸）</h3>
         <div class="canvas-container">
@@ -222,3 +223,4 @@
     </script>
 </body>
 </html>
+
