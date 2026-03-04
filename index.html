@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.6.4] ステータス成長記録</title>
+    <title>[v1.6.6] Status Tracker - フルカテゴリー対応版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -17,6 +17,7 @@
         button { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; transition: 0.2s; }
         .btn-main { background: var(--accent); color: #000; flex: 1; }
         .btn-filter { background: #444; color: #fff; flex: 1; min-width: 85px; }
+        .btn-filter:hover { background: #666; }
         .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; background: #252525; padding: 10px; border-radius: 8px; margin-top: 10px; }
         .canvas-container { position: relative; height: 500px; width: 100%; }
         input[type="number"], input[type="date"] { padding: 8px; background: #2c2c2c; color: #fff; border: 1px solid #444; border-radius: 4px; }
@@ -25,7 +26,7 @@
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.6.4</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.6.6</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -45,13 +46,14 @@
     </div>
 
     <div class="card">
-        <h3>2. 成長推移（カテゴリ切替）</h3>
+        <h3>2. 成長推移</h3>
         <div class="btn-group">
             <button class="btn-filter" onclick="filterGroup('部隊')">🏢 部隊全体</button>
             <button class="btn-filter" onclick="filterGroup('盾兵')">🛡️ 盾兵バフ</button>
             <button class="btn-filter" onclick="filterGroup('槍兵')">⚔️ 槍兵バフ</button>
             <button class="btn-filter" onclick="filterGroup('弓兵')">🏹 弓兵バフ</button>
             <button class="btn-filter" onclick="filterGroup('兵士数')">👥 兵士数推移</button>
+            <button class="btn-filter" onclick="filterGroup('その他')" style="background:#555;">📦 その他</button>
             <button class="btn-filter" onclick="filterGroup('all')" style="background:#666;">全表示</button>
         </div>
         <div class="canvas-container">
@@ -76,7 +78,8 @@
             "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP",
             "出征速度ボーナス"
         ];
-        const displayTargets = [...buffStats, ...soldierStats];
+        // 全ターゲットをマージ
+        let displayTargets = [...buffStats, ...soldierStats];
 
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
@@ -84,11 +87,11 @@
             renderHistory();
         };
 
-        // 名寄せ用関数：OCRの誤字やスペースを修正
+        // 名寄せ：スペース削除、旧字体「擊」を「撃」に統一
         function normalizeLabel(label) {
-            let clean = label.replace(/[\s　]/g, ''); // スペース削除
+            let clean = label.replace(/[\s　]/g, '').replace(/擊/g, '撃');
             for (let target of displayTargets) {
-                if (clean.includes(target)) return target; // 部分一致したら正解の名前に戻す
+                if (clean.includes(target)) return target;
             }
             return clean;
         }
@@ -98,18 +101,13 @@
             if (!text) return;
             const values = text.match(/[\d,.]+/g) || [];
             const rawLabels = text.match(/[一-龠ぁ-んァ-ヶーA-Za-z0-9]{2,}/g) || [];
-            
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
-            
             rawLabels.forEach((label, i) => {
                 if (values[i]) {
                     const normalized = normalizeLabel(label);
                     const val = values[i].replace(/,/g, '');
-                    grid.innerHTML += `<div class="edit-item">
-                        <label style="font-size:9px; color:#aaa;">${normalized}</label>
-                        <input type="number" step="0.01" class="stat-input" data-label="${normalized}" value="${val}">
-                    </div>`;
+                    grid.innerHTML += `<div class="edit-item"><label style="font-size:9px; color:#aaa;">${normalized}</label><input type="number" step="0.01" class="stat-input" data-label="${normalized}" value="${val}"></div>`;
                 }
             });
             document.getElementById('editArea').style.display = 'block';
@@ -119,9 +117,7 @@
             const date = document.getElementById('inputDate').value;
             const inputs = document.querySelectorAll('.stat-input');
             const newStats = {};
-            inputs.forEach(input => {
-                if (input.value) newStats[input.dataset.label] = parseFloat(input.value);
-            });
+            inputs.forEach(input => { if (input.value) newStats[input.dataset.label] = parseFloat(input.value); });
             const rawData = localStorage.getItem(storageKey);
             let history = rawData ? JSON.parse(rawData) : [];
             const idx = history.findIndex(d => d.date === date);
@@ -139,14 +135,26 @@
             const rawData = localStorage.getItem(storageKey);
             if (!rawData) return;
             const history = JSON.parse(rawData);
+
+            // 動的に全項目を把握（JSON内の未定義項目を拾うため）
+            let allKeys = new Set(displayTargets);
+            history.forEach(d => {
+                Object.keys(d.stats).forEach(k => allKeys.add(normalizeLabel(k)));
+            });
+            const dynamicTargets = Array.from(allKeys);
+
             const labels = history.map(d => d.date);
             const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#aed581', '#ff8a65', '#d4e157', '#4db6ac'];
 
-            const datasets = displayTargets.map((target, i) => {
+            const datasets = dynamicTargets.map((target, i) => {
                 const isSoldier = soldierStats.includes(target);
                 return {
                     label: target,
-                    data: history.map(d => (d.stats && d.stats[target] !== undefined) ? d.stats[target] : null),
+                    data: history.map(d => {
+                        // 名寄せしてデータを取得
+                        const val = d.stats[target] || d.stats[target.replace(/撃/g, '擊')];
+                        return val !== undefined ? val : null;
+                    }),
                     borderColor: colors[i % colors.length],
                     backgroundColor: colors[i % colors.length],
                     yAxisID: isSoldier ? 'y1' : 'y',
@@ -164,12 +172,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#aaa', font: { size: 9 }, boxWidth: 10 } }
-                    },
+                    plugins: { legend: { display: true, position: 'bottom', labels: { color: '#aaa', font: { size: 9 }, boxWidth: 10 } } },
                     scales: { 
                         x: { ticks: { color: '#aaa' }, grid: { color: '#333' } },
-                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: 'バフ %', color: '#03dac6' } },
+                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: '数値 / %', color: '#03dac6' } },
                         y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#bb86fc', callback: v => v.toLocaleString() }, title: { display: true, text: '兵士数', color: '#bb86fc' } }
                     }
                 }
@@ -178,11 +184,18 @@
 
         function filterGroup(groupName) {
             myChart.data.datasets.forEach(ds => {
-                if (groupName === 'all') { ds.hidden = false; }
-                else if (groupName === '部隊') { ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度')); }
-                else if (groupName === '兵士数') { ds.hidden = !soldierStats.includes(ds.label); }
-                else {
+                if (groupName === 'all') {
+                    ds.hidden = false;
+                } else if (groupName === '部隊') {
+                    ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度'));
+                } else if (groupName === '兵士数') {
+                    ds.hidden = !soldierStats.includes(ds.label);
+                } else if (groupName === 'その他') {
+                    const knownKeywords = ['盾兵', '槍兵', '弓兵', '部隊', '速度', ...soldierStats];
+                    ds.hidden = knownKeywords.some(k => ds.label.includes(k));
+                } else {
                     const regex = new RegExp(groupName);
+                    // バフ名に一致し、かつ兵士数実数でないものを表示
                     ds.hidden = !(regex.test(ds.label) && !soldierStats.includes(ds.label));
                 }
             });
@@ -214,7 +227,7 @@
             const data = localStorage.getItem(storageKey);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v164.json`;
+            a.download = `status_tracker_v166.json`;
             a.click();
         }
 
