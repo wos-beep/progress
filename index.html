@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.6.7] Status Tracker - 単位最適化版</title>
+    <title>[v1.7.0] Status Tracker - 定義固定版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -17,7 +17,6 @@
         button { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; transition: 0.2s; }
         .btn-main { background: var(--accent); color: #000; flex: 1; }
         .btn-filter { background: #444; color: #fff; flex: 1; min-width: 85px; }
-        .btn-filter:hover { background: #666; }
         .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; background: #252525; padding: 10px; border-radius: 8px; margin-top: 10px; }
         .canvas-container { position: relative; height: 500px; width: 100%; }
         input[type="number"], input[type="date"] { padding: 8px; background: #2c2c2c; color: #fff; border: 1px solid #444; border-radius: 4px; }
@@ -26,7 +25,7 @@
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.6.7</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.7.0</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -70,15 +69,17 @@
         let myChart;
         const storageKey = 'game_stats_v1.2.0'; 
         
-        const soldierStats = ["烈日盾兵", "烈日槍兵", "烈日弓兵", "切り札盾兵", "切り札槍兵", "切り札弓兵"];
-        const buffStats = [
+        // --- 定義エリア ---
+        const soldierKeywords = ["烈日", "切り札"];
+        const buffSuffixes = ["攻撃力", "防御力", "殺傷力", "HP"];
+        
+        // グラフ描画時に使う基本ターゲットリスト（名寄せ用）
+        const masterTargets = [
             "部隊攻撃力", "部隊防御力", "部隊殺傷力", "部隊HP",
             "盾兵攻撃力", "盾兵防御力", "盾兵殺傷力", "盾兵HP",
             "槍兵攻撃力", "槍兵防御力", "槍兵殺傷力", "槍兵HP",
-            "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP",
-            "出征速度ボーナス"
+            "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP"
         ];
-        let displayTargets = [...buffStats, ...soldierStats];
 
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
@@ -86,11 +87,10 @@
             renderHistory();
         };
 
+        // 名寄せ：スペース削除、旧字体「擊」を「撃」に変換
         function normalizeLabel(label) {
             let clean = label.replace(/[\s　]/g, '').replace(/擊/g, '撃');
-            for (let target of displayTargets) {
-                if (clean.includes(target)) return target;
-            }
+            for (let t of masterTargets) { if (clean.includes(t)) return t; }
             return clean;
         }
 
@@ -134,18 +134,17 @@
             if (!rawData) return;
             const history = JSON.parse(rawData);
 
-            let allKeys = new Set(displayTargets);
-            history.forEach(d => {
-                Object.keys(d.stats).forEach(k => allKeys.add(normalizeLabel(k)));
-            });
+            // JSONにある全項目を抽出（名寄せ済み）
+            let allKeys = new Set();
+            history.forEach(d => { Object.keys(d.stats).forEach(k => allKeys.add(normalizeLabel(k))); });
             const dynamicTargets = Array.from(allKeys);
 
             const labels = history.map(d => d.date);
             const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#aed581', '#ff8a65', '#d4e157', '#4db6ac'];
 
             const datasets = dynamicTargets.map((target, i) => {
-                // 実数軸(y1)に送る条件：兵士数 または 「容量」という文字が含まれる場合
-                const isRealNumber = soldierStats.includes(target) || target.includes("容量");
+                // 右軸(実数)判定：兵士数（烈日/切り札）または「容量」
+                const isRealNum = soldierKeywords.some(k => target.includes(k)) || target.includes("容量");
                 
                 return {
                     label: target,
@@ -155,7 +154,7 @@
                     }),
                     borderColor: colors[i % colors.length],
                     backgroundColor: colors[i % colors.length],
-                    yAxisID: isRealNumber ? 'y1' : 'y',
+                    yAxisID: isRealNum ? 'y1' : 'y',
                     tension: 0.2,
                     spanGaps: true,
                     hidden: false
@@ -182,20 +181,28 @@
 
         function filterGroup(groupName) {
             myChart.data.datasets.forEach(ds => {
+                const label = ds.label;
+                // 判定フラグ
+                const isSoldier = soldierKeywords.some(k => label.includes(k));
+                const isBuff = buffSuffixes.some(s => label.includes(s));
+                
                 if (groupName === 'all') {
                     ds.hidden = false;
-                } else if (groupName === '部隊') {
-                    // 部隊全体バフ、速度、および出征容量を含める
-                    ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度') || ds.label.includes('出征容量'));
                 } else if (groupName === '兵士数') {
-                    ds.hidden = !soldierStats.includes(ds.label);
+                    ds.hidden = !isSoldier;
+                } else if (groupName === '部隊') {
+                    ds.hidden = !(label.startsWith('部隊') && isBuff);
+                } else if (groupName === '盾兵') {
+                    ds.hidden = !(label.startsWith('盾兵') && isBuff);
+                } else if (groupName === '槍兵') {
+                    ds.hidden = !(label.startsWith('槍兵') && isBuff);
+                } else if (groupName === '弓兵') {
+                    ds.hidden = !(label.startsWith('弓兵') && isBuff);
                 } else if (groupName === 'その他') {
-                    const knownKeywords = ['盾兵', '槍兵', '弓兵', '部隊', '速度', '容量', ...soldierStats];
-                    ds.hidden = knownKeywords.some(k => ds.label.includes(k));
-                } else {
-                    const regex = new RegExp(groupName);
-                    // 兵士実数と容量を除外してバフのみ表示
-                    ds.hidden = !(regex.test(ds.label) && !soldierStats.includes(ds.label) && !ds.label.includes("容量"));
+                    // 1. 兵士数ではない
+                    // 2. 「部隊/盾/槍/弓」から始まるバフではない
+                    const isMainBuff = (label.startsWith('部隊') || label.startsWith('盾兵') || label.startsWith('槍兵') || label.startsWith('弓兵')) && isBuff;
+                    ds.hidden = (isSoldier || isMainBuff);
                 }
             });
             myChart.update();
@@ -226,7 +233,7 @@
             const data = localStorage.getItem(storageKey);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v167.json`;
+            a.download = `status_tracker_v170.json`;
             a.click();
         }
 
