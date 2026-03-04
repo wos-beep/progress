@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.6.6] Status Tracker - フルカテゴリー対応版</title>
+    <title>[v1.6.7] Status Tracker - 単位最適化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -26,7 +26,7 @@
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.6.6</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.6.7</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -78,7 +78,6 @@
             "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP",
             "出征速度ボーナス"
         ];
-        // 全ターゲットをマージ
         let displayTargets = [...buffStats, ...soldierStats];
 
         window.onload = () => {
@@ -87,7 +86,6 @@
             renderHistory();
         };
 
-        // 名寄せ：スペース削除、旧字体「擊」を「撃」に統一
         function normalizeLabel(label) {
             let clean = label.replace(/[\s　]/g, '').replace(/擊/g, '撃');
             for (let target of displayTargets) {
@@ -136,7 +134,6 @@
             if (!rawData) return;
             const history = JSON.parse(rawData);
 
-            // 動的に全項目を把握（JSON内の未定義項目を拾うため）
             let allKeys = new Set(displayTargets);
             history.forEach(d => {
                 Object.keys(d.stats).forEach(k => allKeys.add(normalizeLabel(k)));
@@ -147,17 +144,18 @@
             const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#aed581', '#ff8a65', '#d4e157', '#4db6ac'];
 
             const datasets = dynamicTargets.map((target, i) => {
-                const isSoldier = soldierStats.includes(target);
+                // 実数軸(y1)に送る条件：兵士数 または 「容量」という文字が含まれる場合
+                const isRealNumber = soldierStats.includes(target) || target.includes("容量");
+                
                 return {
                     label: target,
                     data: history.map(d => {
-                        // 名寄せしてデータを取得
                         const val = d.stats[target] || d.stats[target.replace(/撃/g, '擊')];
                         return val !== undefined ? val : null;
                     }),
                     borderColor: colors[i % colors.length],
                     backgroundColor: colors[i % colors.length],
-                    yAxisID: isSoldier ? 'y1' : 'y',
+                    yAxisID: isRealNumber ? 'y1' : 'y',
                     tension: 0.2,
                     spanGaps: true,
                     hidden: false
@@ -175,8 +173,8 @@
                     plugins: { legend: { display: true, position: 'bottom', labels: { color: '#aaa', font: { size: 9 }, boxWidth: 10 } } },
                     scales: { 
                         x: { ticks: { color: '#aaa' }, grid: { color: '#333' } },
-                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: '数値 / %', color: '#03dac6' } },
-                        y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#bb86fc', callback: v => v.toLocaleString() }, title: { display: true, text: '兵士数', color: '#bb86fc' } }
+                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: 'バフ / 速度 %', color: '#03dac6' } },
+                        y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#bb86fc', callback: v => v.toLocaleString() }, title: { display: true, text: '実数（人数・容量）', color: '#bb86fc' } }
                     }
                 }
             });
@@ -187,16 +185,17 @@
                 if (groupName === 'all') {
                     ds.hidden = false;
                 } else if (groupName === '部隊') {
-                    ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度'));
+                    // 部隊全体バフ、速度、および出征容量を含める
+                    ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度') || ds.label.includes('出征容量'));
                 } else if (groupName === '兵士数') {
                     ds.hidden = !soldierStats.includes(ds.label);
                 } else if (groupName === 'その他') {
-                    const knownKeywords = ['盾兵', '槍兵', '弓兵', '部隊', '速度', ...soldierStats];
+                    const knownKeywords = ['盾兵', '槍兵', '弓兵', '部隊', '速度', '容量', ...soldierStats];
                     ds.hidden = knownKeywords.some(k => ds.label.includes(k));
                 } else {
                     const regex = new RegExp(groupName);
-                    // バフ名に一致し、かつ兵士数実数でないものを表示
-                    ds.hidden = !(regex.test(ds.label) && !soldierStats.includes(ds.label));
+                    // 兵士実数と容量を除外してバフのみ表示
+                    ds.hidden = !(regex.test(ds.label) && !soldierStats.includes(ds.label) && !ds.label.includes("容量"));
                 }
             });
             myChart.update();
@@ -227,7 +226,7 @@
             const data = localStorage.getItem(storageKey);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v166.json`;
+            a.download = `status_tracker_v167.json`;
             a.click();
         }
 
