@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.6.2] ステータス成長記録 - 軍団別フィルタ</title>
+    <title>[v1.6.3] ステータス成長記録 - バフ・兵士数分離版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -16,7 +16,7 @@
         .btn-group { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
         button { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; transition: 0.2s; }
         .btn-main { background: var(--accent); color: #000; flex: 1; }
-        .btn-filter { background: #444; color: #fff; flex: 1; min-width: 80px; }
+        .btn-filter { background: #444; color: #fff; flex: 1; min-width: 90px; }
         .btn-filter:hover { background: #666; }
         .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; background: #252525; padding: 10px; border-radius: 8px; margin-top: 10px; }
         .canvas-container { position: relative; height: 500px; width: 100%; }
@@ -26,7 +26,7 @@
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.6.2</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.6.3</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -46,13 +46,13 @@
     </div>
 
     <div class="card">
-        <h3>2. 成長推移（軍団別ビュー）</h3>
+        <h3>2. 成長推移（カテゴリ切替）</h3>
         <div class="btn-group">
             <button class="btn-filter" onclick="filterGroup('部隊')">🏢 部隊全体</button>
-            <button class="btn-filter" onclick="filterGroup('盾兵')">🛡️ 盾兵団</button>
-            <button class="btn-filter" onclick="filterGroup('槍兵')">⚔️ 槍兵団</button>
-            <button class="btn-filter" onclick="filterGroup('弓兵')">🏹 弓兵団</button>
-            <button class="btn-filter" onclick="filterGroup('烈日|切り札')">👥 兵士数</button>
+            <button class="btn-filter" onclick="filterGroup('盾兵')">🛡️ 盾兵バフ</button>
+            <button class="btn-filter" onclick="filterGroup('槍兵')">⚔️ 槍兵バフ</button>
+            <button class="btn-filter" onclick="filterGroup('弓兵')">🏹 弓兵バフ</button>
+            <button class="btn-filter" onclick="filterGroup('兵士数')">👥 兵士数推移</button>
             <button class="btn-filter" onclick="filterGroup('all')" style="background:#666;">全表示</button>
         </div>
         <div class="canvas-container">
@@ -69,14 +69,13 @@
         let myChart;
         const storageKey = 'game_stats_v1.2.0'; 
         
-        // 解析・描画対象リスト
+        const soldierStats = ["烈日盾兵", "烈日槍兵", "烈日弓兵", "切り札盾兵", "切り札槍兵", "切り札弓兵"];
         const displayTargets = [
             "部隊攻撃力", "部隊防御力", "部隊殺傷力", "部隊HP",
             "盾兵攻撃力", "盾兵防御力", "盾兵殺傷力", "盾兵HP",
             "槍兵攻撃力", "槍兵防御力", "槍兵殺傷力", "槍兵HP",
             "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP",
-            "出征速度ボーナス",
-            "烈日盾兵", "烈日槍兵", "烈日弓兵", "切り札盾兵", "切り札槍兵", "切り札弓兵"
+            "出征速度ボーナス", ...soldierStats
         ];
 
         window.onload = () => {
@@ -127,7 +126,7 @@
             const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#aed581', '#ff8a65', '#d4e157', '#4db6ac'];
 
             const datasets = displayTargets.map((target, i) => {
-                const isSoldier = target.includes("烈日") || target.includes("切り札");
+                const isSoldier = soldierStats.includes(target);
                 return {
                     label: target,
                     data: history.map(d => (d.stats && d.stats[target] !== undefined) ? d.stats[target] : null),
@@ -153,24 +152,26 @@
                     },
                     scales: { 
                         x: { ticks: { color: '#aaa' }, grid: { color: '#333' } },
-                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: 'ステータス %', color: '#03dac6' } },
-                        y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#bb86fc' }, title: { display: true, text: '兵士数', color: '#bb86fc' } }
+                        y: { position: 'left', ticks: { color: '#03dac6', callback: v => v + '%' }, title: { display: true, text: 'バフ %', color: '#03dac6' } },
+                        y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#bb86fc', callback: v => v.toLocaleString() }, title: { display: true, text: '兵士数', color: '#bb86fc' } }
                     }
                 }
             });
         }
 
-        // --- 新ロジック：軍団別フィルタ ---
         function filterGroup(groupName) {
             myChart.data.datasets.forEach(ds => {
                 if (groupName === 'all') {
                     ds.hidden = false;
                 } else if (groupName === '部隊') {
-                    // 「部隊」を含み、かつ「兵」を含まないものを表示（「部隊攻撃力」は出すが「盾兵...」は出さない）
                     ds.hidden = !(ds.label.includes('部隊') || ds.label.includes('速度'));
+                } else if (groupName === '兵士数') {
+                    // 兵士数(烈日/切り札)のみ表示
+                    ds.hidden = !soldierStats.includes(ds.label);
                 } else {
+                    // バフ項目から、兵士実数(烈日/切り札)を除外してフィルタ
                     const regex = new RegExp(groupName);
-                    ds.hidden = !regex.test(ds.label);
+                    ds.hidden = !(regex.test(ds.label) && !soldierStats.includes(ds.label));
                 }
             });
             myChart.update();
@@ -201,7 +202,7 @@
             const data = localStorage.getItem(storageKey);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v162.json`;
+            a.download = `status_tracker_v163.json`;
             a.click();
         }
 
