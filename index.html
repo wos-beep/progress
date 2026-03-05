@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.7.0] Status Tracker - 定義固定版</title>
+    <title>[v1.7.1] Status Tracker - OCR精度向上版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -25,7 +25,7 @@
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.7.0</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.7.1</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -36,7 +36,7 @@
     <div class="card">
         <h3>1. データの取り込み</h3>
         <input type="date" id="inputDate" style="margin-bottom:10px;">
-        <textarea id="ocrInput" placeholder="コピーしたステータステキストをここに貼り付けてください"></textarea>
+        <textarea id="ocrInput" placeholder="コピーしたテキストを貼り付けてください（カンマ付き数値もOK）"></textarea>
         <button class="btn-main" style="width:100%; margin-top:10px;" onclick="parseText()">数値を抽出して確認</button>
         <div id="editArea" style="display:none; border-top: 1px solid #333; margin-top: 15px; padding-top: 10px;">
             <div id="statsGrid" class="edit-grid"></div>
@@ -68,18 +68,8 @@
     <script>
         let myChart;
         const storageKey = 'game_stats_v1.2.0'; 
-        
-        // --- 定義エリア ---
         const soldierKeywords = ["烈日", "切り札"];
-        const buffSuffixes = ["攻撃力", "防御力", "殺傷力", "HP"];
-        
-        // グラフ描画時に使う基本ターゲットリスト（名寄せ用）
-        const masterTargets = [
-            "部隊攻撃力", "部隊防御力", "部隊殺傷力", "部隊HP",
-            "盾兵攻撃力", "盾兵防御力", "盾兵殺傷力", "盾兵HP",
-            "槍兵攻撃力", "槍兵防御力", "槍兵殺傷力", "槍兵HP",
-            "弓兵攻撃力", "弓兵防御力", "弓兵殺傷力", "弓兵HP"
-        ];
+        const buffSuffixes = ["攻撃力", "防御力", "殺傷力", "HP", "攻擊力"]; // 攻撃力の表記揺れ対応
 
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
@@ -87,27 +77,40 @@
             renderHistory();
         };
 
-        // 名寄せ：スペース削除、旧字体「擊」を「撃」に変換
+        // 名寄せ：スペース削除と、JSON内の「攻擊力」を基準に合わせる
         function normalizeLabel(label) {
-            let clean = label.replace(/[\s　]/g, '').replace(/擊/g, '撃');
-            for (let t of masterTargets) { if (clean.includes(t)) return t; }
+            let clean = label.replace(/[\s　]/g, '');
+            // JSON内のキー名が「攻擊力」となっているため、入力が「攻撃力」なら変換する
+            clean = clean.replace(/攻撃力/g, '攻擊力');
             return clean;
         }
 
         function parseText() {
             const text = document.getElementById('ocrInput').value;
             if (!text) return;
-            const values = text.match(/[\d,.]+/g) || [];
-            const rawLabels = text.match(/[一-龠ぁ-んァ-ヶーA-Za-z0-9]{2,}/g) || [];
+
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
-            rawLabels.forEach((label, i) => {
-                if (values[i]) {
-                    const normalized = normalizeLabel(label);
-                    const val = values[i].replace(/,/g, '');
-                    grid.innerHTML += `<div class="edit-item"><label style="font-size:9px; color:#aaa;">${normalized}</label><input type="number" step="0.01" class="stat-input" data-label="${normalized}" value="${val}"></div>`;
+            
+            // 行ごとに分割して処理
+            const lines = text.split('\n');
+            lines.forEach(line => {
+                // カンマを消してから数値を抽出
+                const cleanLine = line.replace(/,/g, '');
+                const labelMatch = cleanLine.match(/[一-龠ぁ-んァ-ヶーA-Za-z]+/);
+                const valueMatch = cleanLine.match(/[\d.]+/);
+
+                if (labelMatch && valueMatch) {
+                    const normalized = normalizeLabel(labelMatch[0]);
+                    const val = valueMatch[0];
+                    grid.innerHTML += `
+                        <div class="edit-item">
+                            <label style="font-size:9px; color:#aaa;">${normalized}</label>
+                            <input type="number" step="0.01" class="stat-input" data-label="${normalized}" value="${val}">
+                        </div>`;
                 }
             });
+            
             document.getElementById('editArea').style.display = 'block';
         }
 
@@ -134,7 +137,6 @@
             if (!rawData) return;
             const history = JSON.parse(rawData);
 
-            // JSONにある全項目を抽出（名寄せ済み）
             let allKeys = new Set();
             history.forEach(d => { Object.keys(d.stats).forEach(k => allKeys.add(normalizeLabel(k))); });
             const dynamicTargets = Array.from(allKeys);
@@ -143,15 +145,10 @@
             const colors = ['#03dac6', '#bb86fc', '#ff0266', '#ffde03', '#03a9f4', '#4caf50', '#ff9800', '#f44336', '#9c27b0', '#795548', '#607d8b', '#e91e63', '#1abc9c', '#2ecc71', '#3498db', '#9b59b6', '#aed581', '#ff8a65', '#d4e157', '#4db6ac'];
 
             const datasets = dynamicTargets.map((target, i) => {
-                // 右軸(実数)判定：兵士数（烈日/切り札）または「容量」
                 const isRealNum = soldierKeywords.some(k => target.includes(k)) || target.includes("容量");
-                
                 return {
                     label: target,
-                    data: history.map(d => {
-                        const val = d.stats[target] || d.stats[target.replace(/撃/g, '擊')];
-                        return val !== undefined ? val : null;
-                    }),
+                    data: history.map(d => d.stats[target] !== undefined ? d.stats[target] : null),
                     borderColor: colors[i % colors.length],
                     backgroundColor: colors[i % colors.length],
                     yAxisID: isRealNum ? 'y1' : 'y',
@@ -182,13 +179,66 @@
         function filterGroup(groupName) {
             myChart.data.datasets.forEach(ds => {
                 const label = ds.label;
-                // 判定フラグ
                 const isSoldier = soldierKeywords.some(k => label.includes(k));
                 const isBuff = buffSuffixes.some(s => label.includes(s));
                 
                 if (groupName === 'all') {
                     ds.hidden = false;
                 } else if (groupName === '兵士数') {
+                    ds.hidden = !isSoldier;
+                } else if (groupName === '部隊') {
+                    ds.hidden = !(label.startsWith('部隊') && isBuff);
+                } else if (groupName === '盾兵') {
+                    ds.hidden = !(label.startsWith('盾兵') && isBuff);
+                } else if (groupName === '槍兵') {
+                    ds.hidden = !(label.startsWith('槍兵') && isBuff);
+                } else if (groupName === '弓兵') {
+                    ds.hidden = !(label.startsWith('弓兵') && isBuff);
+                } else if (groupName === 'その他') {
+                    const isMainBuff = (label.startsWith('部隊') || label.startsWith('盾兵') || label.startsWith('槍兵') || label.startsWith('弓兵')) && isBuff;
+                    ds.hidden = (isSoldier || isMainBuff);
+                }
+            });
+            myChart.update();
+        }
+
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem(storageKey) || "[]");
+            let html = `<table style="width:100%; font-size:12px;">`;
+            history.forEach((entry, i) => {
+                html += `<tr style="border-bottom:1px solid #333;"><td style="padding:8px;">${entry.date}</td><td style="text-align:right;"><button onclick="editHistory(${i})" style="background:#03a9f4; padding:3px 7px; font-size:10px;">修正</button></td></tr>`;
+            });
+            document.getElementById('historyList').innerHTML = html + `</table>`;
+        }
+
+        function editHistory(index) {
+            const entry = JSON.parse(localStorage.getItem(storageKey))[index];
+            document.getElementById('inputDate').value = entry.date;
+            const grid = document.getElementById('statsGrid');
+            grid.innerHTML = '';
+            for (let label in entry.stats) {
+                grid.innerHTML += `<div class="edit-item"><label style="font-size:9px;">${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${entry.stats[label]}"></div>`;
+            }
+            document.getElementById('editArea').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function exportData() {
+            const data = localStorage.getItem(storageKey);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+            a.download = `status_tracker_v171.json`;
+            a.click();
+        }
+
+        function importData(e) {
+            const r = new FileReader();
+            r.onload = (ev) => { localStorage.setItem(storageKey, ev.target.result); location.reload(); };
+            r.readAsText(e.target.files[0]);
+        }
+    </script>
+</body>
+</html>e === '兵士数') {
                     ds.hidden = !isSoldier;
                 } else if (groupName === '部隊') {
                     ds.hidden = !(label.startsWith('部隊') && isBuff);
@@ -245,3 +295,4 @@
     </script>
 </body>
 </html>
+
