@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[v1.7.1] Status Tracker - OCR精度向上版</title>
+    <title>[v1.7.2] Status Tracker - ラベル編集・柔軟スキャン版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #e0e0e0; --accent: #03dac6; --border: #333; }
@@ -17,15 +17,19 @@
         button { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; transition: 0.2s; }
         .btn-main { background: var(--accent); color: #000; flex: 1; }
         .btn-filter { background: #444; color: #fff; flex: 1; min-width: 85px; }
-        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; background: #252525; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .edit-grid { display: flex; flex-direction: column; gap: 8px; background: #252525; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .edit-row { display: flex; gap: 5px; align-items: center; background: #333; padding: 5px; border-radius: 6px; }
+        .edit-row input[type="text"] { background: #222; color: var(--accent); border: 1px solid #444; padding: 5px; flex: 2; font-size: 12px; border-radius: 4px; }
+        .edit-row input[type="number"] { background: #222; color: #fff; border: 1px solid #444; padding: 5px; flex: 1; font-size: 12px; border-radius: 4px; }
+        .btn-del { background: #f44336; color: #fff; padding: 5px 8px; font-size: 10px; }
         .canvas-container { position: relative; height: 500px; width: 100%; }
-        input[type="number"], input[type="date"] { padding: 8px; background: #2c2c2c; color: #fff; border: 1px solid #444; border-radius: 4px; }
+        input[type="date"] { padding: 8px; background: #2c2c2c; color: #fff; border: 1px solid #444; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div class="header-flex">
-        <h2>📈 Status Tracker <span class="version-tag">v1.7.1</span></h2>
+        <h2>📈 Status Tracker <span class="version-tag">v1.7.2</span></h2>
         <div>
             <button onclick="exportData()" style="font-size:10px; background:#444; color:#fff;">Export</button>
             <button onclick="document.getElementById('fileInput').click()" style="font-size:10px; background:#444; color:#fff;">Import</button>
@@ -36,7 +40,7 @@
     <div class="card">
         <h3>1. データの取り込み</h3>
         <input type="date" id="inputDate" style="margin-bottom:10px;">
-        <textarea id="ocrInput" placeholder="コピーしたテキストを貼り付けてください（カンマ付き数値もOK）"></textarea>
+        <textarea id="ocrInput" placeholder="項目名と数値が混ざったテキストを貼り付けてください（改行OK）"></textarea>
         <button class="btn-main" style="width:100%; margin-top:10px;" onclick="parseText()">数値を抽出して確認</button>
         <div id="editArea" style="display:none; border-top: 1px solid #333; margin-top: 15px; padding-top: 10px;">
             <div id="statsGrid" class="edit-grid"></div>
@@ -69,7 +73,7 @@
         let myChart;
         const storageKey = 'game_stats_v1.2.0'; 
         const soldierKeywords = ["烈日", "切り札"];
-        const buffSuffixes = ["攻撃力", "防御力", "殺傷力", "HP", "攻擊力"]; // 攻撃力の表記揺れ対応
+        const buffSuffixes = ["攻撃力", "防御力", "殺傷力", "HP", "攻擊力"];
 
         window.onload = () => {
             document.getElementById('inputDate').valueAsDate = new Date();
@@ -77,55 +81,79 @@
             renderHistory();
         };
 
-        // 名寄せ：スペース削除と、JSON内の「攻擊力」を基準に合わせる
+        // 名寄せ：不要な空白除去と旧字体への統一
         function normalizeLabel(label) {
+            if (!label) return "";
             let clean = label.replace(/[\s　]/g, '');
-            // JSON内のキー名が「攻擊力」となっているため、入力が「攻撃力」なら変換する
             clean = clean.replace(/攻撃力/g, '攻擊力');
             return clean;
         }
 
         function parseText() {
-            const text = document.getElementById('ocrInput').value;
-            if (!text) return;
+            const rawText = document.getElementById('ocrInput').value;
+            if (!rawText) return;
 
+            // 1. クリーニング（%とカンマを除去）
+            const cleanText = rawText.replace(/%/g, '').replace(/,/g, '');
+            
+            // 2. 「文字の塊」と「数値の塊」をトークン化
+            const tokens = cleanText.match(/[一-龠ぁ-んァ-ヶーA-Za-z]+|[\d.]+/g) || [];
+            
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
-            
-            // 行ごとに分割して処理
-            const lines = text.split('\n');
-            lines.forEach(line => {
-                // カンマを消してから数値を抽出
-                const cleanLine = line.replace(/,/g, '');
-                const labelMatch = cleanLine.match(/[一-龠ぁ-んァ-ヶーA-Za-z]+/);
-                const valueMatch = cleanLine.match(/[\d.]+/);
 
-                if (labelMatch && valueMatch) {
-                    const normalized = normalizeLabel(labelMatch[0]);
-                    const val = valueMatch[0];
-                    grid.innerHTML += `
-                        <div class="edit-item">
-                            <label style="font-size:9px; color:#aaa;">${normalized}</label>
-                            <input type="number" step="0.01" class="stat-input" data-label="${normalized}" value="${val}">
-                        </div>`;
+            // 3. 順番にペアリング（文字の次に来る数値をセットにする）
+            for (let i = 0; i < tokens.length; i++) {
+                if (isNaN(tokens[i])) { // 文字の場合
+                    const label = tokens[i];
+                    const nextVal = tokens[i+1];
+                    if (nextVal && !isNaN(nextVal)) {
+                        addEditRow(normalizeLabel(label), nextVal);
+                        i++; // 数値も消費したので飛ばす
+                    }
                 }
-            });
-            
+            }
             document.getElementById('editArea').style.display = 'block';
+        }
+
+        function addEditRow(label, value) {
+            const grid = document.getElementById('statsGrid');
+            const row = document.createElement('div');
+            row.className = 'edit-row';
+            row.innerHTML = `
+                <input type="text" class="stat-label-input" value="${label}">
+                <input type="number" step="0.01" class="stat-value-input" value="${value}">
+                <button class="btn-del" onclick="this.parentElement.remove()">×</button>
+            `;
+            grid.appendChild(row);
         }
 
         function saveToStorage() {
             const date = document.getElementById('inputDate').value;
-            const inputs = document.querySelectorAll('.stat-input');
+            const rows = document.querySelectorAll('.edit-row');
             const newStats = {};
-            inputs.forEach(input => { if (input.value) newStats[input.dataset.label] = parseFloat(input.value); });
+
+            rows.forEach(row => {
+                const label = normalizeLabel(row.querySelector('.stat-label-input').value);
+                const val = parseFloat(row.querySelector('.stat-value-input').value);
+                if (label && !isNaN(val)) {
+                    newStats[label] = val;
+                }
+            });
+
             const rawData = localStorage.getItem(storageKey);
             let history = rawData ? JSON.parse(rawData) : [];
             const idx = history.findIndex(d => d.date === date);
-            if (idx > -1) { history[idx].stats = Object.assign({}, history[idx].stats, newStats); }
-            else { history.push({ date, stats: newStats }); }
+            
+            if (idx > -1) {
+                history[idx].stats = Object.assign({}, history[idx].stats, newStats);
+            } else {
+                history.push({ date, stats: newStats });
+            }
+            
             history.sort((a, b) => new Date(a.date) - new Date(b.date));
             localStorage.setItem(storageKey, JSON.stringify(history));
+            
             document.getElementById('editArea').style.display = 'none';
             document.getElementById('ocrInput').value = '';
             updateChart();
@@ -217,7 +245,7 @@
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = '';
             for (let label in entry.stats) {
-                grid.innerHTML += `<div class="edit-item"><label style="font-size:9px;">${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${entry.stats[label]}"></div>`;
+                addEditRow(label, entry.stats[label]);
             }
             document.getElementById('editArea').style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -227,63 +255,7 @@
             const data = localStorage.getItem(storageKey);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v171.json`;
-            a.click();
-        }
-
-        function importData(e) {
-            const r = new FileReader();
-            r.onload = (ev) => { localStorage.setItem(storageKey, ev.target.result); location.reload(); };
-            r.readAsText(e.target.files[0]);
-        }
-    </script>
-</body>
-</html>e === '兵士数') {
-                    ds.hidden = !isSoldier;
-                } else if (groupName === '部隊') {
-                    ds.hidden = !(label.startsWith('部隊') && isBuff);
-                } else if (groupName === '盾兵') {
-                    ds.hidden = !(label.startsWith('盾兵') && isBuff);
-                } else if (groupName === '槍兵') {
-                    ds.hidden = !(label.startsWith('槍兵') && isBuff);
-                } else if (groupName === '弓兵') {
-                    ds.hidden = !(label.startsWith('弓兵') && isBuff);
-                } else if (groupName === 'その他') {
-                    // 1. 兵士数ではない
-                    // 2. 「部隊/盾/槍/弓」から始まるバフではない
-                    const isMainBuff = (label.startsWith('部隊') || label.startsWith('盾兵') || label.startsWith('槍兵') || label.startsWith('弓兵')) && isBuff;
-                    ds.hidden = (isSoldier || isMainBuff);
-                }
-            });
-            myChart.update();
-        }
-
-        function renderHistory() {
-            const history = JSON.parse(localStorage.getItem(storageKey) || "[]");
-            let html = `<table style="width:100%; font-size:12px;">`;
-            history.forEach((entry, i) => {
-                html += `<tr style="border-bottom:1px solid #333;"><td style="padding:8px;">${entry.date}</td><td style="text-align:right;"><button onclick="editHistory(${i})" style="background:#03a9f4; padding:3px 7px; font-size:10px;">修正</button></td></tr>`;
-            });
-            document.getElementById('historyList').innerHTML = html + `</table>`;
-        }
-
-        function editHistory(index) {
-            const entry = JSON.parse(localStorage.getItem(storageKey))[index];
-            document.getElementById('inputDate').value = entry.date;
-            const grid = document.getElementById('statsGrid');
-            grid.innerHTML = '';
-            for (let label in entry.stats) {
-                grid.innerHTML += `<div class="edit-item"><label style="font-size:9px;">${label}</label><input type="number" step="0.01" class="stat-input" data-label="${label}" value="${entry.stats[label]}"></div>`;
-            }
-            document.getElementById('editArea').style.display = 'block';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function exportData() {
-            const data = localStorage.getItem(storageKey);
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-            a.download = `status_tracker_v170.json`;
+            a.download = `status_tracker_v172.json`;
             a.click();
         }
 
@@ -295,4 +267,3 @@
     </script>
 </body>
 </html>
-
